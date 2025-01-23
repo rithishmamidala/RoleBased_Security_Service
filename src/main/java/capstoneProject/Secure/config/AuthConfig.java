@@ -27,7 +27,7 @@ public class AuthConfig {
         return http.csrf().disable()  // Disable CSRF for stateless applications
                 .cors().and()  // Configure CORS if needed
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/person/register", "/person/login", "/person/validate").permitAll()  // Allow public access to specified endpoints
+                        .requestMatchers("/person/register", "/person/login", "/person/validate","/person/approvalRequests","/person/approve/{username}","/person/delete/{username}").permitAll()  // Allow public access to specified endpoints
                         .anyRequest().authenticated()  // Require authentication for all other endpoints
                 )
                 .build();

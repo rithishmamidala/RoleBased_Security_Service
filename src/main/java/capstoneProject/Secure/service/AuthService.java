@@ -8,6 +8,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+import java.util.Optional;
+
 @Service
 public class AuthService {
 
@@ -45,6 +48,15 @@ public class AuthService {
         return userRepository.existsByUsername(username);
     }
 
+    public Person findByUsername(String username) {
+        Optional<Person> personOptional = userRepository.findByUsername(username);
+        // If the user exists, return the Person object, otherwise return null
+        return personOptional.orElse(null); // Return null if user is not found
+    }
+
+    public List<Person> findUsersWaitingForApproval() {
+        return userRepository.findByStatus(0); // 0 represents waiting for approval
+    }
 
     public void ValidateAdmin( Person user){
 

@@ -2,6 +2,7 @@ package capstoneProject.Secure.control;
 
 import capstoneProject.Secure.config.CustomUserDetails;
 import capstoneProject.Secure.model.Person;
+import capstoneProject.Secure.repo.UserRepository;
 import capstoneProject.Secure.service.AuthService;
 import capstoneProject.Secure.service.JwtService;
 import io.jsonwebtoken.JwtException;
@@ -14,7 +15,9 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.awt.*;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -30,39 +33,48 @@ public class PersonController {
 
     @Autowired
     private AuthenticationManager authenticationManager;
+    @Autowired
+    private UserRepository userRepository;
 
     @PostMapping("/register")
     public ResponseEntity<String> registerPerson(@RequestBody Person user) {
         try {
-            if (authService.isUserRegistered(user.getUsername())) { // Check if user is already registered
+            // Check if the user is already registered
+            if (authService.isUserRegistered(user.getUsername())) {
                 return ResponseEntity.status(HttpStatus.CONFLICT).body("User already registered");
-            }
-            else{
-                if(user.getRole() == "ADMIN"){
+            } else {
+                // Set initial status to 0 (Pending approval)
+                user.setStatus(0);
 
-                    authService.ValidateAdmin(user);
-                    return ResponseEntity.status(HttpStatus.CONFLICT).body("Sent For Approval");
-
+                // Handle role-specific validation and saving
+                if ("ADMIN".equalsIgnoreCase(user.getRole())) {
+                    authService.ValidateAdmin(user); // Admin-specific validation
+                    authService.saveUser(user); // Save user to database
+                    return ResponseEntity.status(HttpStatus.OK).body("Admin request sent for approval");
+                } else if ("SHOP KEEPER".equalsIgnoreCase(user.getRole())) {
+                    authService.ValidateAdmin(user); // Shop keeper validation
+                    authService.saveUser(user); // Save user to database
+                    return ResponseEntity.status(HttpStatus.OK).body("Shop Keeper request sent for approval");
+                } else {
+                    // If the role is not valid
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid role. Please provide a valid role.");
                 }
-                else{
-                    user = authService.saveUser(user);
-                    String token = authService.generateToken(user.getUsername());
-                    return ResponseEntity.status(HttpStatus.CREATED).body(token);
-
-                }
             }
-
-
-
-
         } catch (Exception e) {
+            // Handle exceptions
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An error occurred during registration");
         }
     }
 
-
     @PostMapping("/login")
     public ResponseEntity<Map<String, String>> getToken(@RequestBody Person authRequest) {
+        Person user = authService.findByUsername(authRequest.getUsername());
+
+        // Check if the user's status is 0 (pending approval)
+        if (user.getStatus() == 0) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "You are not yet approved. Contact admin"));
+        }
+
         Authentication authenticate = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(authRequest.getUsername(), authRequest.getPassword()));
 
@@ -78,7 +90,22 @@ public class PersonController {
             throw new RuntimeException("Invalid access");
         }
     }
+    @GetMapping("/app")
+    public ResponseEntity<String> WaitingForApproval() {
+        return ResponseEntity.ok("ddd");
+    }
 
+    @GetMapping("/approvalRequests")
+    public ResponseEntity<List<Person>> getUsersWaitingForApproval() {
+        List<Person> usersWaitingForApproval = authService.findUsersWaitingForApproval();
+        System.out.print(usersWaitingForApproval);
+
+        if (usersWaitingForApproval.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NO_CONTENT).body(usersWaitingForApproval); // No Content if no users found
+        }
+
+        return ResponseEntity.ok(usersWaitingForApproval);
+    }
     @GetMapping("/validate")
     public ResponseEntity<String> validateToken(@RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader) {
         try {
@@ -90,12 +117,47 @@ public class PersonController {
 
             // Extract username from the token
             String username = jwtService.extractUsername(token);
-
             // Return username if token is valid
             return ResponseEntity.ok(username);
         } catch (JwtException | IllegalArgumentException e) {
             // Return error message if token is invalid or expired
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid or expired token");
         }
+    }
+
+    @PutMapping("/approve/{username}")
+    public ResponseEntity<String> approveUser(@PathVariable String username) {
+        // Fetch the user from the database by their username
+        Person user = authService.findByUsername(username);
+
+        if (user == null) {
+            // If the user is not found, return a 404 Not Found response
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found with username: " + username);
+        }
+
+        // Update the status to 1 (approved)
+        user.setStatus(1);
+
+        // Save the updated user back to the database
+        authService.saveUser(user);
+
+        // Return a success response
+        return ResponseEntity.ok("User with username " + username + " has been approved.");
+    }
+    @DeleteMapping("/delete/{username}")
+    public ResponseEntity<String> deleteUser(@PathVariable String username) {
+        // Fetch the user from the database by their username
+        Person user = authService.findByUsername(username);
+
+        if (user == null) {
+            // If the user is not found, return a 404 Not Found response
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found with username: " + username);
+        }
+
+        // Delete the user from the database
+        userRepository.delete(user);
+
+        // Return a success response
+        return ResponseEntity.ok("User with username " + username + " has been deleted.");
     }
 }
