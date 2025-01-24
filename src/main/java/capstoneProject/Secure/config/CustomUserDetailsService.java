@@ -1,6 +1,5 @@
 package capstoneProject.Secure.config;
 
-
 import capstoneProject.Secure.model.Person;
 import capstoneProject.Secure.repo.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,10 +16,10 @@ public class CustomUserDetailsService implements UserDetailsService {
     @Autowired
     private UserRepository repository;
 
-
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         Optional<Person> credential = repository.findByUsername(username);
-        return credential.map(CustomUserDetails::new).orElseThrow(() -> new UsernameNotFoundException("user not found with name :" + username));
+        System.out.println(credential);
+        return credential.map(CustomUserDetails::new).orElseThrow(() -> new UsernameNotFoundException("user not found with name: " + username));
     }
 }

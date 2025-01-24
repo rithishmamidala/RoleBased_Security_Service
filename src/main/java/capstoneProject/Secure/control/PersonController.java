@@ -6,6 +6,8 @@ import capstoneProject.Secure.repo.UserRepository;
 import capstoneProject.Secure.service.AuthService;
 import capstoneProject.Secure.service.JwtService;
 import io.jsonwebtoken.JwtException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -13,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.annotation.*;
 
 import java.awt.*;
@@ -36,9 +39,12 @@ public class PersonController {
     @Autowired
     private UserRepository userRepository;
 
+    private static final Logger logger = LoggerFactory.getLogger(PersonController.class);
+
     @PostMapping("/register")
     public ResponseEntity<String> registerPerson(@RequestBody Person user) {
         try {
+            logger.debug("Attempting authentication for username: {}", user.getUsername());
             // Check if the user is already registered
             if (authService.isUserRegistered(user.getUsername())) {
                 return ResponseEntity.status(HttpStatus.CONFLICT).body("User already registered");
@@ -69,27 +75,32 @@ public class PersonController {
     @PostMapping("/login")
     public ResponseEntity<Map<String, String>> getToken(@RequestBody Person authRequest) {
         Person user = authService.findByUsername(authRequest.getUsername());
-
-        // Check if the user's status is 0 (pending approval)
         if (user.getStatus() == 0) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "You are not yet approved. Contact admin"));
         }
 
-        Authentication authenticate = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(authRequest.getUsername(), authRequest.getPassword()));
+        try {
+            logger.debug("Attempting authentication for username: {}", authRequest.getUsername());
+            Authentication authenticate = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(authRequest.getUsername(), authRequest.getPassword()));
 
-        if (authenticate.isAuthenticated()) {
-            CustomUserDetails userCredential = (CustomUserDetails) authenticate.getPrincipal();
-            String token = authService.generateToken(authRequest.getUsername());
+                    if (authenticate.isAuthenticated()) {
+                        CustomUserDetails userCredential = (CustomUserDetails) authenticate.getPrincipal();
+                        String token = authService.generateToken(authRequest.getUsername());
+                        Map<String, String> response = new HashMap<>();
+                        response.put("token", token); // Include the token in the response
+                        return ResponseEntity.ok(response);
+                    }
 
-            Map<String, String> response = new HashMap<>();
-            response.put("token", token); // Include the token in the response
-
-            return ResponseEntity.ok(response);
-        } else {
-            throw new RuntimeException("Invalid access");
+             else {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Invalid credentials"));
+            }
+        } catch (AuthenticationException e) {
+            logger.debug("Attempting authentication for username: {}", authRequest.getUsername());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Authentication failed"));
         }
     }
+
     @GetMapping("/app")
     public ResponseEntity<String> WaitingForApproval() {
         return ResponseEntity.ok("ddd");
@@ -139,7 +150,7 @@ public class PersonController {
         user.setStatus(1);
 
         // Save the updated user back to the database
-        authService.saveUser(user);
+        userRepository.save(user);
 
         // Return a success response
         return ResponseEntity.ok("User with username " + username + " has been approved.");

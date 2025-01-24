@@ -12,16 +12,19 @@ public class CustomUserDetails implements UserDetails {
     private Long id;
     private String username;
     private String password;
+    private String role;
 
     public CustomUserDetails(Person userCredential) {
         this.id = userCredential.getId();
         this.username = userCredential.getUsername();
         this.password = userCredential.getPassword();
+        this.role = userCredential.getRole();  // Get the role of the user
     }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of();
+        // Convert role to authorities
+        return List.of(() -> role);  // This is how we can assign role as authority
     }
 
     @Override
